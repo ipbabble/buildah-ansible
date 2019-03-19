@@ -1,5 +1,6 @@
 import sys
-import oyaml, ruamel.yaml
+#import oyaml, ruamel.yaml
+import oyaml
 
 from oyaml import load, dump
 
@@ -34,26 +35,48 @@ EXAMPLES = '''
 '''
 
 class Buildahfrom(object):
-	yaml_tag = u'name: BUILDAH - start the new image from'
+	yaml_tag = '- name: BUILDAH - start the new image from'
 
 	def __init__(self, image):
 		self.buildah_from = { 'name': image}
 		self.register = 'from_result'
 
-'''
-def buildahr_from(buildahyaml, playbook):
+	@classmethod
+	def to_yaml(cls, representer, node):
+		return representer.represent_scalar(cls.yaml_tag,
+											u'{buildah_from} {register}'.format_map(vars(self)))
 
-	print oyaml.dump(buildahyaml['image'])
-	task = list()
-	task[0]['name'] = "BUILDAH -buildah from "
-	task[0]['buildah_from'] = "BUILDAH -buildah from "
-	task[0]['buildah_from']['name'] = buildahyaml['image']['from']
-	task[0]['register'] = "from_result"
-	playbook['tasks'][0] = task 
-#	playbook['tasks'][0]['buildah_from'] = ""
-#	playbook['tasks'][0]['buildah_from']['name'] = buildahyaml['image']['from']
-	print oyaml.dump(playbook)
-'''
+	@classmethod
+	def from_yaml(cls, constructor, node):
+		return cls(*node.value.split('\n'))
+
+class Buildahmount(object):
+	yaml_tag = '- name: BUILDAH - mount the contianer file system'
+
+	def __init__(self):
+		self.buildah_mount = { 'name': "{{ from_result.stdout | trim }}" }
+		self.register = 'mount_result'
+
+
+class DNFonmount(object):
+	yaml_tag = '- name: DNF - install direct into mount'
+
+	def __init__(self, packages):
+		self.dnf = { 'name': packages, 
+					 'installroot': "{{ mount_result.stdout | trim }}",
+					 'relserver': 29, 
+					 'state': "latest" }
+		self.register = 'dnf_result'
+
+
+class Buildahrun(object):
+	yaml_tag = '- name: BUILDAH - run a command in the container'
+
+def __init__(self, command):
+		self.buildah_run = { 'cmd': command }
+
+
+
 
 def main():
 
@@ -70,19 +93,13 @@ def main():
 	playbook = dict()
 	playbook['tasks'] = list()
 
-	pbyaml = ruamel.yaml.YAML()
-	#try:
-#	if buildahyaml['image']['from'] != "":
-#		buildahr_from(buildahyaml, playbook)
-	#except Exception as e:
-	#	raise e
 
 	with open('buildah_playbook.yml', 'w') as outfile:
-		pbyaml.register_class(Buildahfrom)
 		from_image = buildahyaml['image']['from']
 		print(from_image)
-#	   	pbyaml.dump([Buildahfrom(from_image)], outfile)
-	   	pbyaml.dump([Buildahfrom(from_image)], sys.stdout)
+	   	oyaml.dump([Buildahfrom(from_image)], sys.stdout, default_flow_style=False)
+	   	oyaml.dump([Buildahmount()], sys.stdout, default_flow_style=False)
+	   	oyaml.dump([DNFonmount(buildahyaml['image']['packages'])], sys.stdout, default_flow_style=False)
 
 if __name__ == '__main__':
     main()	
